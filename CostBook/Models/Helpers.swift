@@ -44,6 +44,7 @@ extension Date {
 }
 
 // MARK: - CSV 导出
+@MainActor
 enum CSVExporter {
     static func make(from store: Store) -> String {
         var rows = [["日期", "类型", "分类", "金额", "备注"]]

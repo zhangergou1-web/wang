@@ -140,37 +140,45 @@ struct DailyChart: View {
     @Binding var pickedDay: Int?
 
     var body: some View {
-        let cal = Calendar.current
-        let days = cal.range(of: .day, in: .month, for: month)?.count ?? 30
-        var perDay = [Double](repeating: 0, count: days)
-        for e in store.entries(in: month) where e.type == .expense {
-            let d = cal.component(.day, from: e.date)
-            if d >= 1 && d <= days { perDay[d - 1] += e.amount }
-        }
-        let maxV = max(perDay.max() ?? 0, 1)
+        let bars = dailyExpenses()
+        let maxV = max(bars.max() ?? 0, 1)
 
-        VStack {
-            HStack(alignment: .bottom, spacing: 4) {
-                ForEach(0..<days, id: \.self) { i in
-                    VStack(spacing: 3) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.accentColor.opacity(pickedDay == nil || pickedDay == i + 1 ? 0.9 : 0.25))
-                            .frame(height: max(3, CGFloat(perDay[i] / maxV) * 76))
-                        Text("\(i + 1)")
-                            .font(.system(size: 9))
-                            .foregroundStyle(pickedDay == i + 1 ? Color.accentColor : .secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        pickedDay = pickedDay == i + 1 ? nil : i + 1
-                    }
+        HStack(alignment: .bottom, spacing: 4) {
+            ForEach(0..<bars.count, id: \.self) { i in
+                VStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.accentColor.opacity(pickedDay == nil || pickedDay == i + 1 ? 0.9 : 0.25))
+                        .frame(height: max(3, CGFloat(bars[i] / maxV) * 76))
+                    Text("\(i + 1)")
+                        .font(.system(size: 9))
+                        .foregroundStyle(pickedDay == i + 1 ? Color.accentColor : .secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    pickedDay = pickedDay == i + 1 ? nil : i + 1
                 }
             }
-            .frame(height: 92, alignment: .bottom)
         }
+        .frame(height: 92, alignment: .bottom)
         .padding(12)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var days: Int {
+        Calendar.current.range(of: .day, in: .month, for: month)?.count ?? 30
+    }
+
+    /// 当月每天支出合计（下标 0 = 1 号）
+    private func dailyExpenses() -> [Double] {
+        let cal = Calendar.current
+        var sums = [Double](repeating: 0, count: days)
+        for e in store.entries(in: month) {
+            guard e.type == .expense else { continue }
+            let d = cal.component(.day, from: e.date)
+            if d >= 1 && d <= sums.count { sums[d - 1] += e.amount }
+        }
+        return sums
     }
 }
 
