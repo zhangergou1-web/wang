@@ -103,6 +103,7 @@ struct SettingsView: View {
     @State private var newName = ""
     @State private var newIcon = "🏷️"
     @State private var newType: EntryType = .expense
+    @State private var showImport = false
 
     var body: some View {
         NavigationStack {
@@ -119,6 +120,21 @@ struct SettingsView: View {
                     .onChange(of: totalBudgetText) { _, v in
                         store.budget.total = Double(v)
                     }
+                }
+
+                Section {
+                    Button {
+                        showImport = true
+                    } label: {
+                        HStack {
+                            Label("从其他记账软件导入", systemImage: "square.and.arrow.down")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption).foregroundStyle(.tertiary)
+                        }
+                    }
+                } footer: {
+                    Text("支持 CSV，自动识别常见列名，可预览后确认。")
                 }
 
                 Section("分类预算") {
@@ -185,6 +201,7 @@ struct SettingsView: View {
                     Text("数据仅保存在本机，不会上传到任何服务器。")
                 }
             }
+            .sheet(isPresented: $showImport) { ImportView() }
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

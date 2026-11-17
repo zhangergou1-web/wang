@@ -138,6 +138,76 @@ final class Store: ObservableObject {
     func addCategory(name: String, icon: String, type: EntryType, parent: UUID?) {
         categories.append(Category(name: name, icon: icon, type: type, parentID: parent))
     }
+
+    // MARK: - 导入
+    /// 找出或新建分类，返回 ID
+    func categoryID(named name: String, type: EntryType) -> UUID {
+        let key = name.trimmingCharacters(in: .whitespaces).lowercased()
+        if let hit = categories.first(where: { $0.type == type && $0.name.lowercased() == key }) {
+            return hit.id
+        }
+        // 也在二级分类里找
+        if let hit = categories.first(where: { $0.type == type && $0.name.lowercased() == key && $0.parentID != nil }) {
+            return hit.id
+        }
+        let icon = Self.guessIcon(name)
+        let c = Category(name: name, icon: icon, type: type)
+        categories.append(c)
+        return c.id
+    }
+
+    static func guessIcon(_ name: String) -> String {
+        let table: [(String, String)] = [
+            ("餐", "🍜"), ("饭", "🍜"), ("food", "🍜"), ("咖", "☕"),
+            ("交通", "🚇"), ("车", "🚗"), ("地铁", "🚇"),
+            ("购", "🛍️"), ("衣", "👕"), ("数码", "📱"),
+            ("日用", "🧴"), ("超市", "🛒"),
+            ("房", "🏠"), ("租", "🏠"), ("水", "💧"), ("电", "💡"), ("燃气", "🔥"),
+            ("通讯", "📱"), ("话费", "📞"), ("网", "🌐"),
+            ("娱乐", "🎮"), ("游戏", "🎮"), ("电影", "🎬"),
+            ("医", "💊"), ("药", "💊"),
+            ("学", "📚"), ("书", "📖"),
+            ("人情", "🎁"), ("礼", "🎁"),
+            ("旅", "✈️"),
+            ("工资", "💰"), ("薪", "💰"), ("奖", "🏆"), ("兼职", "🛠️"),
+            ("理财", "📈"), ("投资", "📈"), ("报销", "🧾")
+        ]
+        for (k, v) in table where name.contains(k) { return v }
+        return "🏷️"
+    }
+
+    /// 只查不建，用于预览显示图标
+    func existingCategoryID(named name: String, type: EntryType) -> UUID? {
+        let key = name.trimmingCharacters(in: .whitespaces).lowercased()
+        return categories.first { $0.type == type && $0.name.lowercased() == key }?.id
+    }
+
+    /// 提交导入：建立分类、跳过重复、写入
+    @discardableResult
+    func commitImport(_ rows: [ParsedRow], skipDuplicates: Bool = true) -> ImportResult {
+        var result = ImportResult()
+        var existing = Set<String>()
+        if skipDuplicates {
+            for e in entries {
+                let name = category(e.categoryID)?.name ?? ""
+                existing.insert("\(Int(e.date.timeIntervalSince1970 / 60))|\(e.type.rawValue)|\(e.amount)|\(name)|\(e.note)")
+            }
+        }
+        var seen = Set<String>()
+        for row in rows {
+            let sig = row.signature
+            if skipDuplicates && (existing.contains(sig) || seen.contains(sig)) {
+                result.duplicates += 1
+                continue
+            }
+            seen.insert(sig)
+            let cid = categoryID(named: row.categoryName, type: row.type)
+            entries.append(Entry(type: row.type, amount: row.amount, categoryID: cid,
+                                 note: row.note, date: row.date))
+            result.added += 1
+        }
+        return result
+    }
     func deleteCategory(_ cat: Category) {
         categories.removeAll { $0.id == cat.id || $0.parentID == cat.id }
     }
