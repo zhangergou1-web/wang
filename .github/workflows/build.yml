@@ -1,0 +1,70 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build CostBook (unsigned IPA)
+    runs-on: macos-15
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphone || true
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for device (no code signing)
+        run: |
+          set -o pipefail
+          xcodebuild -project CostBook.xcodeproj \
+            -scheme CostBook \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee build.log | tail -n 60
+
+      - name: Package IPA (Payload/)
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          echo "Found: $APP"
+          test -n "$APP"
+          rm -rf Payload CostBook.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          # 打 zip 时保持目录结构，再改名为 ipa
+          zip -qry CostBook-unsigned.ipa Payload
+          ls -lh CostBook-unsigned.ipa
+          unzip -l CostBook-unsigned.ipa | head -20
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CostBook-unsigned-ipa
+          path: CostBook-unsigned.ipa
+          retention-days: 30
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
