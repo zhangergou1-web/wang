@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct ImportView: View {
@@ -13,6 +14,8 @@ struct ImportView: View {
     @State private var errorText: String?
     @State private var done: ImportResult?
     @State private var skipDuplicates = true
+    @State private var showPaste = false
+    @State private var pasteText = ""
 
     var body: some View {
         NavigationStack {
@@ -23,7 +26,7 @@ struct ImportView: View {
                     } label: {
                         HStack {
                             Image(systemName: "doc.badge.plus")
-                            Text(fileName.isEmpty ? "选择 CSV 文件" : fileName)
+                            Text(fileName.isEmpty ? "从「文件」中选择 CSV" : fileName)
                                 .lineLimit(1)
                             Spacer()
                             if !fileName.isEmpty {
@@ -31,8 +34,22 @@ struct ImportView: View {
                             }
                         }
                     }
+
+                    Button {
+                        readClipboard()
+                    } label: {
+                        Label("从剪贴板读取", systemImage: "doc.on.clipboard")
+                    }
+
+                    Button {
+                        showPaste = true
+                    } label: {
+                        Label("粘贴 CSV 文本", systemImage: "text.cursor")
+                    }
                 } header: {
-                    Text("从其他记账软件导出 CSV 后选进来")
+                    Text("三种方式，任选一种")
+                } footer: {
+                    Text("如果系统文件选择器点了没反应，用下面两种。")
                 }
 
                 if let err = errorText {
@@ -121,6 +138,35 @@ struct ImportView: View {
                           allowsMultipleSelection: false) { result in
                 handlePick(result)
             }
+            .sheet(isPresented: $showPaste) {
+                NavigationStack {
+                    VStack(spacing: 0) {
+                        TextEditor(text: $pasteText)
+                            .font(.system(.footnote, design: .monospaced))
+                            .padding(8)
+                            .overlay(alignment: .topLeading) {
+                                if pasteText.isEmpty {
+                                    Text("把 CSV 内容粘贴到这里，第一行是表头……")
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.top, 16).padding(.leading, 13)
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                    }
+                    .navigationTitle("粘贴 CSV 文本")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("取消") { showPaste = false }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("解析") { applyPaste() }
+                                .disabled(pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -164,5 +210,30 @@ struct ImportView: View {
         } else {
             preview = r
         }
+    }
+
+    private func readClipboard() {
+        errorText = nil
+        preview = nil
+        done = nil
+        guard let text = UIPasteboard.general.string, !text.isEmpty else {
+            errorText = "剪贴板里没有文字"
+            return
+        }
+        fileName = "来自剪贴板"
+        rawText = text
+        parseNow()
+    }
+
+    private func applyPaste() {
+        let text = pasteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        errorText = nil
+        preview = nil
+        done = nil
+        fileName = "粘贴的文本"
+        rawText = text
+        parseNow()
+        showPaste = false
     }
 }
