@@ -140,7 +140,7 @@ enum Importer {
     }
 
     static func fallbackIcon(_ name: String) -> String {
-        Store.guessIcon(name)
+        CategoryIcon.guess(name)
     }
 
     /// 表头 → 列下标

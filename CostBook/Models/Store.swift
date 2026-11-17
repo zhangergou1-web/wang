@@ -150,31 +150,12 @@ final class Store: ObservableObject {
         if let hit = categories.first(where: { $0.type == type && $0.name.lowercased() == key && $0.parentID != nil }) {
             return hit.id
         }
-        let icon = Self.guessIcon(name)
+        let icon = CategoryIcon.guess(name)
         let c = Category(name: name, icon: icon, type: type)
         categories.append(c)
         return c.id
     }
 
-    static func guessIcon(_ name: String) -> String {
-        let table: [(String, String)] = [
-            ("餐", "🍜"), ("饭", "🍜"), ("food", "🍜"), ("咖", "☕"),
-            ("交通", "🚇"), ("车", "🚗"), ("地铁", "🚇"),
-            ("购", "🛍️"), ("衣", "👕"), ("数码", "📱"),
-            ("日用", "🧴"), ("超市", "🛒"),
-            ("房", "🏠"), ("租", "🏠"), ("水", "💧"), ("电", "💡"), ("燃气", "🔥"),
-            ("通讯", "📱"), ("话费", "📞"), ("网", "🌐"),
-            ("娱乐", "🎮"), ("游戏", "🎮"), ("电影", "🎬"),
-            ("医", "💊"), ("药", "💊"),
-            ("学", "📚"), ("书", "📖"),
-            ("人情", "🎁"), ("礼", "🎁"),
-            ("旅", "✈️"),
-            ("工资", "💰"), ("薪", "💰"), ("奖", "🏆"), ("兼职", "🛠️"),
-            ("理财", "📈"), ("投资", "📈"), ("报销", "🧾")
-        ]
-        for (k, v) in table where name.contains(k) { return v }
-        return "🏷️"
-    }
 
     /// 只查不建，用于预览显示图标
     func existingCategoryID(named name: String, type: EntryType) -> UUID? {
