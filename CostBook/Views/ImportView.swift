@@ -16,6 +16,8 @@ struct ImportView: View {
     @State private var skipDuplicates = true
     @State private var showPaste = false
     @State private var pasteText = ""
+    @State private var isParsing = false
+    @State private var parseNote: String?
 
     var body: some View {
         NavigationStack {
@@ -50,6 +52,16 @@ struct ImportView: View {
                     Text("三种方式，任选一种")
                 } footer: {
                     Text("如果系统文件选择器点了没反应，用下面两种。")
+                }
+
+                if isParsing {
+                    Section {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("正在解析 \(rawText.count) 个字符…")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 if let err = errorText {
@@ -150,32 +162,8 @@ struct ImportView: View {
                 handlePick(result)
             }
             .sheet(isPresented: $showPaste) {
-                NavigationStack {
-                    VStack(spacing: 0) {
-                        TextEditor(text: $pasteText)
-                            .font(.system(.footnote, design: .monospaced))
-                            .padding(8)
-                            .overlay(alignment: .topLeading) {
-                                if pasteText.isEmpty {
-                                    Text("把 CSV 内容粘贴到这里，第一行是表头……")
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-                                        .padding(.top, 16).padding(.leading, 13)
-                                        .allowsHitTesting(false)
-                                }
-                            }
-                    }
-                    .navigationTitle("粘贴 CSV 文本")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("取消") { showPaste = false }
-                        }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("解析") { applyPaste() }
-                                .disabled(pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
-                    }
+                PasteSheet(text: $pasteText) {
+                    applyPaste()
                 }
             }
         }
@@ -214,12 +202,34 @@ struct ImportView: View {
     }
 
     private func parseNow() {
-        let r = Importer.parse(text: rawText)
-        parsed = r.previewRows
-        if r.previewRows.isEmpty {
-            errorText = r.errors.isEmpty ? "没有解析出任何记录" : r.errors.joined(separator: "\n")
-        } else {
-            preview = r
+        let source = rawText
+        guard !source.isEmpty else { return }
+
+        // 粗略估算行数，超限直接拒绝，避免内存爆炸
+        let lineCount = source.reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
+        guard lineCount <= 100_000 else {
+            errorText = "文本有 \(lineCount) 行，超过 10 万行上限。请拆分后再导入。"
+            return
+        }
+
+        // 大文件在后台解析，避免阻塞主线程导致卡死
+        isParsing = true
+        errorText = nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            let r = Importer.parse(text: source)
+            DispatchQueue.main.async {
+                isParsing = false
+                parsed = r.previewRows
+                if r.previewRows.isEmpty {
+                    errorText = r.errors.isEmpty ? "没有解析出任何记录" : r.errors.joined(separator: "\n")
+                } else {
+                    preview = r
+                    // 预览只保留前面一部分，真实导入用全部
+                    if let last = r.errors.last {
+                        parseNote = last
+                    }
+                }
+            }
         }
     }
 
