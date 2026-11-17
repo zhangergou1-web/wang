@@ -23,8 +23,8 @@ targets:
       path: CostBook/Info.plist
       properties:
         CFBundleDisplayName: 小账本
-        CFBundleShortVersionString: "1.1"
-        CFBundleVersion: "1"
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
