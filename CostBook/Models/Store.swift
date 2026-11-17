@@ -37,6 +37,9 @@ struct Budget: Codable {
 // MARK: - 持久化
 @MainActor
 final class Store: ObservableObject {
+    /// 批量修改时置 true，避免每次变更都写盘
+    private var suspendPersist = false
+
     @Published var entries: [Entry] = [] { didSet { persist() } }
     @Published var categories: [Category] = [] { didSet { persist() } }
     @Published var budget = Budget() { didSet { persist() } }
@@ -69,6 +72,7 @@ final class Store: ObservableObject {
     }
 
     private func persist() {
+        if suspendPersist { return }
         let snap = Snapshot(entries: entries, categories: categories, budget: budget)
         guard let data = try? JSONEncoder().encode(snap) else { return }
         try? data.write(to: fileURL, options: .atomic)
@@ -167,6 +171,22 @@ final class Store: ObservableObject {
     @discardableResult
     func commitImport(_ rows: [ParsedRow], skipDuplicates: Bool = true) -> ImportResult {
         var result = ImportResult()
+
+        // 先把分类索引建好，避免循环内反复线性查找
+        var catIndex: [String: UUID] = [:]
+        for c in categories {
+            catIndex["\(c.type.rawValue)|\(c.name.lowercased())"] = c.id
+        }
+        func catID(_ name: String, _ type: EntryType) -> UUID {
+            let trimmed = name.trimmingCharacters(in: .whitespaces)
+            let key = "\(type.rawValue)|\(trimmed.lowercased())"
+            if let hit = catIndex[key] { return hit }
+            let new = Category(name: trimmed, icon: CategoryIcon.guess(trimmed), type: type)
+            categories.append(new)
+            catIndex[key] = new.id
+            return new.id
+        }
+
         var existing = Set<String>()
         if skipDuplicates {
             for e in entries {
@@ -174,7 +194,11 @@ final class Store: ObservableObject {
                 existing.insert("\(Int(e.date.timeIntervalSince1970 / 60))|\(e.type.rawValue)|\(e.amount)|\(name)|\(e.note)")
             }
         }
+
+        var newEntries: [Entry] = []
+        newEntries.reserveCapacity(rows.count)
         var seen = Set<String>()
+
         for row in rows {
             let sig = row.signature
             if skipDuplicates && (existing.contains(sig) || seen.contains(sig)) {
@@ -182,11 +206,18 @@ final class Store: ObservableObject {
                 continue
             }
             seen.insert(sig)
-            let cid = categoryID(named: row.categoryName, type: row.type)
-            entries.append(Entry(type: row.type, amount: row.amount, categoryID: cid,
-                                 note: row.note, date: row.date))
+            let cid = catID(row.categoryName, row.type)
+            newEntries.append(Entry(type: row.type, amount: row.amount, categoryID: cid,
+                                    note: row.note, date: row.date))
             result.added += 1
         }
+
+        // 关键：一次性合并 + 只落盘一次，避免逐条写文件导致 O(n²)
+        suspendPersist = true
+        entries.append(contentsOf: newEntries)
+        suspendPersist = false
+        persist()
+
         return result
     }
     func deleteCategory(_ cat: Category) {

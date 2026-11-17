@@ -17,6 +17,7 @@ struct ImportView: View {
     @State private var showPaste = false
     @State private var pasteText = ""
     @State private var isParsing = false
+    @State private var isCommitting = false
     @State private var parseNote: String?
 
     var body: some View {
@@ -114,15 +115,28 @@ struct ImportView: View {
 
                     Section {
                         Button {
-                            let r = store.commitImport(p.previewRows, skipDuplicates: skipDuplicates)
-                            done = r
-                            preview = nil
-                            parsed = []
-                            rawText = ""
+                            guard !isCommitting else { return }
+                            isCommitting = true
+                            let rows = p.previewRows
+                            let skip = skipDuplicates
+                            // 放到下一帧再执行，先让界面刷新出「导入中」
+                            DispatchQueue.main.async {
+                                let r = store.commitImport(rows, skipDuplicates: skip)
+                                done = r
+                                preview = nil
+                                parsed = []
+                                rawText = ""
+                                isCommitting = false
+                            }
                         } label: {
-                            Text("导入 \(p.previewRows.count) 条记录").frame(maxWidth: .infinity)
+                            HStack {
+                                if isCommitting { ProgressView().tint(.white) }
+                                Text(isCommitting ? "正在写入…" : "导入 \(p.previewRows.count) 条记录")
+                            }
+                            .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
+                        .disabled(isCommitting)
                     }
                 }
 

@@ -200,7 +200,7 @@ struct EntryList: View {
             }
         }()
 
-        VStack(spacing: 0) {
+        LazyVStack(spacing: 0) {
             if rowEntries.isEmpty {
                 Text(pickedDay == nil ? "本月还没有记录" : "这一天没有记账")
                     .font(.subheadline)
