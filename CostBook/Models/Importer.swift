@@ -189,11 +189,27 @@ enum Importer {
         }
 
         guard map[.date] != nil || map[.amount] != nil || expenseCol != nil || incomeCol != nil else {
-            result.errors.append("认不出表头。至少要有「日期」或「金额」列。\n当前列名：" + header.prefix(8).joined(separator: "、"))
+            result.errors.append("认不出表头。至少要有「日期」或「金额」列。\n\n实际读到的表头：\n" + header.prefix(10).joined(separator: " ｜ "))
+            if table.count > 1 {
+                result.errors.append("第二行内容：\n" + table[1].prefix(8).joined(separator: " ｜ "))
+            }
             return result
         }
 
         let formatters = makeDateFormatters()
+
+        // 记下列映射，出现 0 条结果时方便诊断
+        let mappedDesc = map.map { k, v in
+            let name: String
+            switch k {
+            case .date: name = "日期"
+            case .amount: name = "金额"
+            case .category: name = "分类"
+            case .note: name = "备注"
+            case .type: name = "类型"
+            }
+            return "\(name)=第\(v + 1)列「\(header[v])」"
+        }.joined(separator: "，")
 
         for (offset, cells) in table.dropFirst().enumerated() {
             let rowNumber = offset + 2
@@ -286,6 +302,14 @@ enum Importer {
                                                note: note,
                                                date: date))
             result.totalParsed += 1
+        }
+
+        // 全部行都失败时，把列映射和首行内容带出来，方便定位
+        if result.previewRows.isEmpty {
+            result.errors.append("已识别列：" + mappedDesc)
+            if table.count > 1 {
+                result.errors.append("首条数据：" + table[1].prefix(8).joined(separator: " ｜ "))
+            }
         }
         return result
     }

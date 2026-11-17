@@ -54,8 +54,19 @@ struct ImportView: View {
 
                 if let err = errorText {
                     Section {
-                        Text(err).font(.footnote).foregroundStyle(.red)
-                    } header: { Text("无法导入") }
+                        Text(err)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.red)
+                            .textSelection(.enabled)
+                        Button {
+                            UIPasteboard.general.string = err
+                            errorText = err + "\n\n（已复制，可直接发给我）"
+                        } label: {
+                            Label("复制这段诊断信息", systemImage: "doc.on.doc")
+                        }
+                    } header: {
+                        Text("没有解析出数据")
+                    }
                 }
 
                 if let p = preview, !p.previewRows.isEmpty {
